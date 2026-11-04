@@ -1,6 +1,6 @@
 // Approval batches, routine dedupe, read-only routines, id minting: run against a throwaway data dir.
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const sent: string[] = [];
@@ -70,6 +70,29 @@ test("routine dedupe: newer run supersedes proposed copy, queued copy blocks", (
   task("active", "T-0004", "approved:routine:pr-review");
   expect(A.routineQueued("pr-review")).toBe("T-0004");
   expect(A.routineQueued("other")).toBe("");
+});
+
+test("routine dedupe: finished copies (waiting/delegated, blocked-on-decision) do not block the next run", () => {
+  task("waiting", "T-0005", "routine:pr-review"); // finished but left in waiting (delegated)
+  writeDoc(P("tasks", "waiting", "T-0005.md"), { id: "T-0005", title: "t T-0005", agent: "lead", source: "routine:pr-review", created: ago(60), finished: ago(30) }, "body");
+  task("blocked", "T-0006", "routine:pr-review"); // finished while blocked on a decision
+  writeDoc(P("tasks", "blocked", "T-0006.md"), { id: "T-0006", title: "t T-0006", agent: "lead", source: "routine:pr-review", created: ago(60), finished: ago(30) }, "body");
+  expect(A.routineQueued("pr-review")).toBe("");
+  task("waiting", "T-0007", "routine:pr-review"); // genuinely still waiting
+  expect(A.routineQueued("pr-review")).toBe("T-0007");
+});
+
+test("routine dedupe: a long-parked copy stops blocking, a fresh one still does", () => {
+  const park = (dir: string, id: string, hours: number) =>
+    writeDoc(P("tasks", dir, `${id}.md`), { id, source: "routine:parked", created: new Date(Date.now() - hours * 3600_000).toISOString() }, "");
+  park("waiting", "T-0101", 7);
+  park("blocked", "T-0102", 7);
+  expect(A.routineQueued("parked")).toBe("");
+  park("active", "T-0103", 7);
+  expect(A.routineQueued("parked")).toBe("T-0103");
+  unlinkSync(P("tasks", "active", "T-0103.md"));
+  park("waiting", "T-0104", 1);
+  expect(A.routineQueued("parked")).toBe("T-0104");
 });
 
 test("read-only routines skip approval at onboarding; others and followups stay gated", () => {

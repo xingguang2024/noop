@@ -209,7 +209,8 @@ async function processTask(path: string, cfg: Cfg, host: string) {
   } else if (res.status === "waiting") { // parked: the slot is free until the wait is over
     const mins = Math.min(120, Math.max(5, Number(res.wait_minutes) || 15));
     const wake = new Date(Date.now() + mins * 60_000).toISOString();
-    writeDoc(P("tasks", "waiting", `${meta.id}.md`), { ...done, wake_at: wake, waiting_on: res.waiting_on ?? "" },
+    // the owner's approval covers the whole task: a wait for CI before the approved merge must not revoke it
+    writeDoc(P("tasks", "waiting", `${meta.id}.md`), { ...done, gate_override: meta.gate_override, wake_at: wake, waiting_on: res.waiting_on ?? "" },
       body + runNote + `\n**Waiting on:** ${res.waiting_on ?? "?"} (check again ${wake})\n`);
     journal(host, `⏳ ${meta.id} 等待 ${res.waiting_on ?? ""}，${mins} 分钟后再看`);
   } else if (res.status === "needs_decision") {
