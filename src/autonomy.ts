@@ -32,6 +32,7 @@ export function routineQueued(name: string): string {
   for (const s of QUEUED) for (const p of list(P("tasks", s), /^T-.*\.md$/)) {
     const m = readDoc(p).meta;
     if (!isRoutine(m, name)) continue;
+    if (m.finished) continue; // a terminal copy (delegated, blocked-on-decision) is not queued/running
     // an old copy parked on something slow (the owner clicking merge) must not starve the routine's other work
     if ((s === "waiting" || s === "blocked") && Date.now() - Date.parse(m.created ?? "") > PARKED_COPY_MS) continue;
     return m.id;

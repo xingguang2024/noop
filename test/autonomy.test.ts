@@ -72,6 +72,16 @@ test("routine dedupe: newer run supersedes proposed copy, queued copy blocks", (
   expect(A.routineQueued("other")).toBe("");
 });
 
+test("routine dedupe: finished copies (waiting/delegated, blocked-on-decision) do not block the next run", () => {
+  task("waiting", "T-0005", "routine:pr-review"); // finished but left in waiting (delegated)
+  writeDoc(P("tasks", "waiting", "T-0005.md"), { id: "T-0005", title: "t T-0005", agent: "lead", source: "routine:pr-review", created: ago(60), finished: ago(30) }, "body");
+  task("blocked", "T-0006", "routine:pr-review"); // finished while blocked on a decision
+  writeDoc(P("tasks", "blocked", "T-0006.md"), { id: "T-0006", title: "t T-0006", agent: "lead", source: "routine:pr-review", created: ago(60), finished: ago(30) }, "body");
+  expect(A.routineQueued("pr-review")).toBe("");
+  task("waiting", "T-0007", "routine:pr-review"); // genuinely still waiting
+  expect(A.routineQueued("pr-review")).toBe("T-0007");
+});
+
 test("routine dedupe: a long-parked copy stops blocking, a fresh one still does", () => {
   const park = (dir: string, id: string, hours: number) =>
     writeDoc(P("tasks", dir, `${id}.md`), { id, source: "routine:parked", created: new Date(Date.now() - hours * 3600_000).toISOString() }, "");
